@@ -550,7 +550,7 @@ git commit -m "feat: integrate AudioCaptureManager and AudioMixer into main reco
     "version": "1.0.0",
     "minAppVersion": "0.15.0",
     "description": "Record system audio (Zoom, Meet, Teams) and save as M4A in your vault",
-    "author": "s32747",
+    "author": "Yuto Takagi",
     "isDesktopOnly": true
 }
 ```
@@ -983,7 +983,7 @@ export default class SystemRecordingPlugin extends Plugin {
 
 - [ ] **Step 2: TypeScript ビルドが通ることを確認**
 
-Run: `cd /Users/s32747/Develop/obsidian-system-recording && npm install && npm run build 2>&1`
+Run: `npm install && npm run build 2>&1`
 Expected: ビルド成功
 
 - [ ] **Step 3: Commit**
@@ -1042,7 +1042,7 @@ git commit -m "feat: add recording pulse animation, remove sample plugin artifac
 
 Run:
 ```bash
-cd /Users/s32747/Develop/obsidian-system-recording
+cd obsidian-system-recording
 cd swift-helper && swift build -c release 2>&1
 cp .build/release/SystemRecorder ../system-recorder
 cd ..
