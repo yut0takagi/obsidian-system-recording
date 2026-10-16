@@ -75,11 +75,28 @@ if #available(macOS 13.0, *) {
 
             Task {
                 await captureManager.stopCapture()
-                let duration = await mixer.finalize()
 
-                // Move temp file to final destination
+                let duration: Double
+                do {
+                    duration = try mixer.finalize()
+                } catch {
+                    // The per-source temp tracks are kept for recovery.
+                    emitJSON(["status": "error", "message": "Failed to mix the recording: \(error.localizedDescription)"])
+                    exit(1)
+                }
+
+                // Move temp file to final destination; report a failure instead of claiming success.
                 let finalURL = URL(fileURLWithPath: finalOutputPath)
-                try? FileManager.default.moveItem(at: tempOutputURL, to: finalURL)
+                do {
+                    try FileManager.default.moveItem(at: tempOutputURL, to: finalURL)
+                } catch {
+                    emitJSON([
+                        "status": "error",
+                        "message": "Failed to save the recording: \(error.localizedDescription)",
+                        "tempFile": tempOutputURL.path,
+                    ])
+                    exit(1)
+                }
 
                 emitJSON(["status": "stopped", "duration": Int(duration), "file": finalOutputPath])
                 exit(0)
