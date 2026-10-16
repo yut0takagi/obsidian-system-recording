@@ -200,3 +200,24 @@ describe("RecordingController.on", () => {
 		expect(after).toHaveBeenCalled();
 	});
 });
+
+describe("RecordingController.onBusy", () => {
+	it("is told when a start is refused because a recording is in progress", async () => {
+		const onBusy = vi.fn();
+		const c = new RecordingController(makeDeps({ onBusy }));
+		await c.start();
+		await c.start();
+		expect(onBusy).toHaveBeenCalledTimes(1);
+	});
+
+	it("is not told while the first start is still launching (double click)", async () => {
+		const gate = deferred<ActiveSession | null>();
+		const onBusy = vi.fn();
+		const c = new RecordingController(makeDeps({ launch: vi.fn(() => gate.promise), onBusy }));
+		const first = c.start();
+		await c.start();
+		gate.resolve({ ...SESSION });
+		await first;
+		expect(onBusy).not.toHaveBeenCalled();
+	});
+});

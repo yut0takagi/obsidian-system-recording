@@ -37,6 +37,8 @@ export interface ControllerDeps<S extends ActiveSession = ActiveSession> {
 		session: S,
 		outcome: HelperOutcome
 	) => Promise<{ path: string | null; notePath: string | null }>;
+	/** Called when a start is refused because a recording is in progress (not while one is still starting). */
+	onBusy?: () => void;
 	/** Receives unexpected errors (launch/save/listener failures). */
 	onError?: (error: unknown) => void;
 }
@@ -72,7 +74,10 @@ export class RecordingController<S extends ActiveSession = ActiveSession> {
 	}
 
 	async start(options: StartOptions = {}): Promise<boolean> {
-		if (this.state !== "idle") return false;
+		if (this.state !== "idle") {
+			if (this.isRecording()) this.deps.onBusy?.();
+			return false;
+		}
 		this.state = "starting";
 		let session: S | null = null;
 		try {
