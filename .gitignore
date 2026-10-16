@@ -25,3 +25,6 @@ data.json
 # Swift Package Manager
 swift-helper/.build/
 swift-helper/*.resolved
+
+# Local Claude Code settings
+.claude/

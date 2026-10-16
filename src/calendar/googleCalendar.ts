@@ -1,6 +1,7 @@
 import { requestUrl } from "obsidian";
 import type { GoogleOAuth } from "../auth/googleOAuth";
 import { extractMeetLink, RawConferenceEvent } from "./meetLink";
+import { isDeclinedBySelf, RawAttendee } from "./eventFilter";
 
 export interface GCalEvent {
 	id: string;
@@ -9,6 +10,8 @@ export interface GCalEvent {
 	start: Date;
 	end: Date;
 	allDay: boolean;
+	/** You declined the invitation. */
+	declined: boolean;
 	meetLink: string | null;
 	htmlLink: string;
 }
@@ -28,6 +31,7 @@ interface RawEvent extends RawConferenceEvent {
 	htmlLink?: string;
 	start?: { date?: string; dateTime?: string };
 	end?: { date?: string; dateTime?: string };
+	attendees?: RawAttendee[];
 }
 
 async function authedGet(oauth: GoogleOAuth, url: string): Promise<unknown> {
@@ -86,6 +90,7 @@ export async function listEvents(
 			start,
 			end,
 			allDay: isAllDay,
+			declined: isDeclinedBySelf(ev.attendees),
 			meetLink: extractMeetLink(ev),
 			htmlLink: ev.htmlLink ?? "",
 		};

@@ -1,4 +1,4 @@
-import { ChildProcess, spawn } from "child_process";
+import { ChildProcess, spawn, SpawnOptions } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -10,16 +10,28 @@ export interface RecorderStatus {
     message?: string;
 }
 
+export type SpawnLike = (command: string, args: string[], options: SpawnOptions) => ChildProcess;
+
 export class Recorder {
     private process: ChildProcess | null = null;
     private _isRecording = false;
     private stopFilePath: string | null = null;
+    private _pid: number | null = null;
 
     onStatus: ((status: RecorderStatus) => void) | null = null;
     onError: ((message: string) => void) | null = null;
+    /** The helper exited (code), or could not be started (null + reason). */
+    onExit: ((code: number | null, reason?: string) => void) | null = null;
+
+    constructor(private readonly spawnProcess: SpawnLike = spawn) {}
 
     get isRecording(): boolean {
         return this._isRecording;
+    }
+
+    /** Process id of the running helper; its temp files are named after it. */
+    get pid(): number | null {
+        return this._pid;
     }
 
     start(binaryPath: string, outputPath: string): void {
@@ -31,13 +43,14 @@ export class Recorder {
         );
         this.stopFilePath = stopFile;
 
-        const proc = spawn(binaryPath, [
+        const proc = this.spawnProcess(binaryPath, [
             "start", "--output", outputPath,
             "--stop-file", stopFile,
         ], {
             stdio: ["ignore", "pipe", "pipe"],
         });
         this.process = proc;
+        this._pid = proc.pid ?? null;
         this._isRecording = true;
 
         let buffer = "";
@@ -51,11 +64,10 @@ export class Recorder {
                 if (!line.trim()) continue;
                 try {
                     const status = JSON.parse(line) as RecorderStatus;
-                    this.onStatus?.(status);
-
                     if (status.status === "stopped" || status.status === "error") {
                         this._isRecording = false;
                     }
+                    this.onStatus?.(status);
                 } catch {
                     // Ignore non-JSON output
                 }
@@ -70,20 +82,19 @@ export class Recorder {
         });
 
         proc.on("close", (code: number | null) => {
-            const wasRecording = this._isRecording;
             this._isRecording = false;
             this.process = null;
             this.stopFilePath = null;
-            if (wasRecording && code !== 0 && code !== null) {
-                this.onError?.(`Process exited with code ${code}`);
-            }
+            this._pid = null;
+            this.onExit?.(code);
         });
 
         proc.on("error", (err: Error) => {
             this._isRecording = false;
             this.process = null;
             this.stopFilePath = null;
-            this.onError?.(err.message);
+            this._pid = null;
+            this.onExit?.(null, err.message);
         });
     }
 

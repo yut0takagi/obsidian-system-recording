@@ -1,6 +1,13 @@
-/** SHA-256 (hex) of the system-recorder binary shipped with this plugin version. Refreshed per release. */
+/** SHA-256 (hex) of the system-recorder binary this plugin version accepts. Update together with HELPER_RELEASE_TAG. */
 export const EXPECTED_SHA256 =
 	"8a5326ea84eff8f8a3221e8584b86a2515680f6e575b7cc3e6301fa949560cf2";
+
+/**
+ * GitHub release whose `system-recorder` asset has EXPECTED_SHA256. Pinned
+ * separately from the plugin version so plugin-only releases keep working
+ * without re-uploading the same helper.
+ */
+export const HELPER_RELEASE_TAG = "1.0.4";
 
 const REPO = "yut0takagi/obsidian-system-recording";
 

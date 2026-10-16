@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { shouldRecord, parseKeywords } from "./eventFilter";
+import { shouldRecord, parseKeywords, isDeclinedBySelf } from "./eventFilter";
 
 describe("shouldRecord", () => {
 	it("records a normal timed event when there are no keywords", () => {
@@ -30,5 +30,40 @@ describe("parseKeywords", () => {
 
 	it("returns an empty array for empty input", () => {
 		expect(parseKeywords("")).toEqual([]);
+	});
+});
+
+describe("shouldRecord with declined events", () => {
+	it("skips events the user declined", () => {
+		expect(shouldRecord({ summary: "Team sync", allDay: false, declined: true }, [])).toBe(false);
+	});
+
+	it("records events that were not declined", () => {
+		expect(shouldRecord({ summary: "Team sync", allDay: false, declined: false }, [])).toBe(true);
+	});
+});
+
+describe("isDeclinedBySelf", () => {
+	it("is true when the attendee marked self has declined", () => {
+		expect(
+			isDeclinedBySelf([
+				{ email: "someone@example.com", responseStatus: "accepted" },
+				{ self: true, responseStatus: "declined" },
+			])
+		).toBe(true);
+	});
+
+	it("ignores other attendees who declined", () => {
+		expect(
+			isDeclinedBySelf([
+				{ responseStatus: "declined" },
+				{ self: true, responseStatus: "tentative" },
+			])
+		).toBe(false);
+	});
+
+	it("is false when there is no attendee list (e.g. events on your own calendar)", () => {
+		expect(isDeclinedBySelf(undefined)).toBe(false);
+		expect(isDeclinedBySelf([])).toBe(false);
 	});
 });

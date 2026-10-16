@@ -563,7 +563,7 @@ git commit -m "feat: provision and verify system-recorder binary before recordin
 Copy `main.js`, `manifest.json`, `styles.css` into the vault's plugin folder, and **delete** any existing `system-recorder` there to simulate a store install:
 
 ```bash
-PLUGIN_DIR="/Users/s32747/vault/.obsidian/plugins/system-recording"
+PLUGIN_DIR="<your-test-vault>/.obsidian/plugins/system-recording"
 mkdir -p "$PLUGIN_DIR"
 cp main.js manifest.json styles.css "$PLUGIN_DIR"/
 rm -f "$PLUGIN_DIR/system-recorder"
