@@ -1,5 +1,9 @@
 # Obsidian System Recording
 
+![Downloads](https://raw.githubusercontent.com/yut0takagi/obsidian-system-recording/main/.github/stats/badge.svg)
+
+![Download history](https://raw.githubusercontent.com/yut0takagi/obsidian-system-recording/main/.github/stats/downloads.svg)
+
 macOSのシステム音声（Zoom / Google Meet / Teams等）とマイク音声を録音し、WAVファイルとしてVault内に保存するObsidianプラグイン。
 
 ## Requirements
