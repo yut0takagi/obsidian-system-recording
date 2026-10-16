@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { BinaryProvisioner, ProvisionerDeps, releaseUrl } from "./binary";
+import { BinaryProvisioner, HELPER_RELEASE_TAG, ProvisionerDeps, releaseUrl } from "./binary";
 
 const VALID = "validhash";
 const BIN = "/plugin/system-recorder";
@@ -120,5 +120,15 @@ describe("BinaryProvisioner", () => {
 		const p = new BinaryProvisioner(deps, VALID);
 		await Promise.all([p.ensure(BIN, VERSION), p.ensure(BIN, VERSION)]);
 		expect(downloads).toBe(1);
+	});
+});
+
+describe("HELPER_RELEASE_TAG", () => {
+	it("points at the release that hosts the binary matching EXPECTED_SHA256", () => {
+		// The helper is fetched from this tag, not from the plugin version, so a
+		// plugin release without helper changes does not need to re-upload it.
+		expect(releaseUrl(HELPER_RELEASE_TAG)).toBe(
+			"https://github.com/yut0takagi/obsidian-system-recording/releases/download/1.0.4/system-recorder"
+		);
 	});
 });
