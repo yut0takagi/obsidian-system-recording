@@ -58,6 +58,8 @@ interface Listeners {
 export class RecordingController<S extends ActiveSession = ActiveSession> {
 	private state: State = "idle";
 	private session: S | null = null;
+	/** A helper report that arrived while launch() had not returned yet. */
+	private earlyOutcome: HelperOutcome | null = null;
 	private stopWaiters: Array<(result: { path: string } | null) => void> = [];
 	private listeners: Listeners = { start: new Set(), stop: new Set() };
 
@@ -79,6 +81,7 @@ export class RecordingController<S extends ActiveSession = ActiveSession> {
 			return false;
 		}
 		this.state = "starting";
+		this.earlyOutcome = null;
 		let session: S | null = null;
 		try {
 			session = await this.deps.launch(options);
@@ -92,6 +95,11 @@ export class RecordingController<S extends ActiveSession = ActiveSession> {
 		this.session = session;
 		this.state = "recording";
 		this.emit("start", { title: session.title, notePath: session.notePath });
+		const early = this.earlyOutcome;
+		if (early) {
+			this.earlyOutcome = null;
+			void this.helperFinished(early);
+		}
 		return true;
 	}
 
@@ -108,7 +116,10 @@ export class RecordingController<S extends ActiveSession = ActiveSession> {
 	/** Called when the helper reports it stopped, reports an error, or exits. Later reports are ignored. */
 	async helperFinished(outcome: HelperOutcome): Promise<void> {
 		const session = this.session;
-		if (!session) return;
+		if (!session) {
+			if (this.state === "starting" && !this.earlyOutcome) this.earlyOutcome = outcome;
+			return;
+		}
 		this.session = null;
 		this.state = "stopping";
 

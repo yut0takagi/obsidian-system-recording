@@ -1,12 +1,17 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, DropdownComponent, PluginSettingTab, Setting } from "obsidian";
 import SystemRecordingPlugin from "./main";
 import type { StoredTokens } from "./auth/googleOAuth";
+import type { OutputFormat } from "./audio/saveRecording";
+import { calendarOptions } from "./calendar/calendarOptions";
 
 export interface SystemRecordingSettings {
 	recordingFolder: string;
 	fileNameTemplate: string;
+	outputFormat: OutputFormat;
 	googleClientId: string;
+	/** Only used when SecretStorage is unavailable (see CredentialStore). */
 	googleClientSecret: string;
+	/** Only used when SecretStorage is unavailable (see CredentialStore). */
 	googleTokens: StoredTokens | null;
 	calendarAutoRecord: boolean;
 	calendarId: string;
@@ -16,14 +21,15 @@ export interface SystemRecordingSettings {
 
 export const DEFAULT_SETTINGS: SystemRecordingSettings = {
 	recordingFolder: "recordings",
-	fileNameTemplate: "recording-YYYY-MM-DD-HHmmss",
+	fileNameTemplate: "recording-YYYY-MM-DD-HHmmss-{{title}}",
+	outputFormat: "m4a",
 	googleClientId: "",
 	googleClientSecret: "",
 	googleTokens: null,
 	calendarAutoRecord: false,
 	calendarId: "primary",
 	exclusionKeywords: "",
-	openMeetAutomatically: true,
+	openMeetAutomatically: false,
 };
 
 export class SystemRecordingSettingTab extends PluginSettingTab {
@@ -54,7 +60,7 @@ export class SystemRecordingSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName("File name template")
             .setDesc(
-                "File name format. Tokens `YYYY MM DD HH mm ss` are replaced with the date and time."
+                "Date tokens: YYYY MM DD HH mm ss (also YY MMM MMMM Do ddd dddd hh). {{title}} is the meeting title from the calendar or another plugin. Text in [brackets] is kept as is."
             )
             .addText((text) =>
                 text
@@ -64,6 +70,22 @@ export class SystemRecordingSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
+
+		new Setting(containerEl)
+			.setName("File format")
+			.setDesc(
+				"Save as compressed .m4a (about 43 megabytes per hour) or uncompressed .wav (about 635 megabytes per hour). If the .m4a conversion fails, the .wav file is kept."
+			)
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("m4a", ".m4a (smaller)")
+					.addOption("wav", ".wav (uncompressed)")
+					.setValue(this.plugin.settings.outputFormat)
+					.onChange(async (value) => {
+						this.plugin.settings.outputFormat = value === "wav" ? "wav" : "m4a";
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl).setName("Google カレンダー連携").setHeading();
 
@@ -81,14 +103,17 @@ export class SystemRecordingSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("クライアントシークレット")
-			.setDesc("Google で発行したクライアントシークレット。")
+			.setDesc(
+				this.plugin.credentials.usesSecretStorage
+					? "Google で発行したクライアントシークレット。Obsidian のシークレットストレージに保存し、data.json には書きません。"
+					: "Google で発行したクライアントシークレット。この Obsidian にはシークレットストレージがないため data.json に保存します。"
+			)
 			.addText((text) => {
 				text.inputEl.type = "password";
 				text
-					.setValue(this.plugin.settings.googleClientSecret)
+					.setValue(this.plugin.credentials.getClientSecret())
 					.onChange(async (value) => {
-						this.plugin.settings.googleClientSecret = value.trim();
-						await this.plugin.saveSettings();
+						await this.plugin.credentials.setClientSecret(value.trim());
 					});
 			});
 
@@ -113,7 +138,7 @@ export class SystemRecordingSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("カレンダー自動録音")
-			.setDesc("予定の開始時刻に録音開始の通知を出します。")
+			.setDesc("予定の開始時刻に録音開始の通知を出します。辞退した予定には出しません。")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.calendarAutoRecord)
@@ -124,21 +149,7 @@ export class SystemRecordingSettingTab extends PluginSettingTab {
 					})
 			);
 
-		new Setting(containerEl)
-			.setName("対象カレンダー ID")
-			.setDesc("監視するカレンダーの ID。既定の primary はメインカレンダー。")
-			.addText((text) => {
-				text
-					.setValue(this.plugin.settings.calendarId)
-					.onChange(async (value) => {
-						this.plugin.settings.calendarId = value.trim() || "primary";
-						await this.plugin.saveSettings();
-					});
-				// Re-poll immediately once the user finishes editing (avoids per-keystroke API calls).
-				this.plugin.registerDomEvent(text.inputEl, "blur", () => {
-					this.plugin.refreshCalendarNow();
-				});
-			});
+		this.addCalendarSetting(containerEl);
 
 		new Setting(containerEl)
 			.setName("除外キーワード")
@@ -164,4 +175,65 @@ export class SystemRecordingSettingTab extends PluginSettingTab {
 					})
 			);
     }
+
+	/** A dropdown of your calendars once authenticated; a plain ID field otherwise. */
+	private addCalendarSetting(containerEl: HTMLElement): void {
+		const setting = new Setting(containerEl).setName("対象カレンダー");
+
+		if (!this.plugin.isCalendarAuthenticated()) {
+			setting
+				.setDesc("監視するカレンダーの ID。既定の primary はメインカレンダー。認証すると一覧から選べます。")
+				.addText((text) => {
+					text
+						.setValue(this.plugin.settings.calendarId)
+						.onChange(async (value) => {
+							this.plugin.settings.calendarId = value.trim() || "primary";
+							await this.plugin.saveSettings();
+						});
+					// Re-poll immediately once the user finishes editing (avoids per-keystroke API calls).
+					this.plugin.registerDomEvent(text.inputEl, "blur", () => {
+						this.plugin.refreshCalendarNow();
+					});
+				});
+			return;
+		}
+
+		setting.setDesc("監視するカレンダー。");
+		let dropdown: DropdownComponent | null = null;
+		const fill = (calendars: Parameters<typeof calendarOptions>[0]) => {
+			if (!dropdown) return;
+			dropdown.selectEl.empty();
+			for (const option of calendarOptions(calendars, this.plugin.settings.calendarId)) {
+				dropdown.addOption(option.id, option.label);
+			}
+			dropdown.setValue(this.plugin.settings.calendarId);
+		};
+		const load = async () => {
+			try {
+				fill(await this.plugin.listCalendars());
+				setting.setDesc("監視するカレンダー。");
+			} catch (e) {
+				setting.setDesc(
+					`カレンダー一覧を取得できませんでした: ${e instanceof Error ? e.message : String(e)}`
+				);
+			}
+		};
+
+		setting.addDropdown((d) => {
+			dropdown = d;
+			fill([]);
+			d.onChange(async (value) => {
+				this.plugin.settings.calendarId = value || "primary";
+				await this.plugin.saveSettings();
+				this.plugin.refreshCalendarNow();
+			});
+		});
+		setting.addExtraButton((btn) =>
+			btn
+				.setIcon("refresh-cw")
+				.setTooltip("一覧を再読み込み")
+				.onClick(() => void load())
+		);
+		void load();
+	}
 }

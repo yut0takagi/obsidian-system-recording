@@ -221,3 +221,21 @@ describe("RecordingController.onBusy", () => {
 		expect(onBusy).not.toHaveBeenCalled();
 	});
 });
+
+describe("RecordingController when the helper dies during launch", () => {
+	it("still saves and ends the recording if the helper finishes before launch returns", async () => {
+		const deps = makeDeps();
+		const c = new RecordingController(deps);
+		const onStop = vi.fn();
+		c.on("stop", onStop);
+		deps.launch = vi.fn(async () => {
+			// e.g. a spawn error delivered before launch() resolves
+			void c.helperFinished({ kind: "failed", message: "EACCES" });
+			return { ...SESSION };
+		});
+		await c.start();
+		await vi.waitFor(() => expect(onStop).toHaveBeenCalled());
+		expect(deps.complete).toHaveBeenCalledWith(expect.anything(), { kind: "failed", message: "EACCES" });
+		expect(c.isRecording()).toBe(false);
+	});
+});

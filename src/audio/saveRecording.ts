@@ -62,7 +62,7 @@ export async function saveRecording(
 					ok: true,
 					path: m4aPath,
 					format: "m4a",
-					warning: `Saved as M4A, but the WAV could not be removed: ${message(e)}`,
+					warning: `Saved as .m4a, but the .wav file could not be removed: ${message(e)}`,
 				};
 			}
 		}
@@ -80,7 +80,7 @@ export async function saveRecording(
 		ok: true,
 		path: wavPath,
 		format: "wav",
-		warning: `Could not convert to M4A, so the WAV was kept: ${failure}`,
+		warning: `Could not convert to .m4a, so the .wav file was kept: ${failure}`,
 	};
 }
 
